@@ -1,0 +1,4 @@
+#!/bin/bash
+while true
+	{ echo -ne "HTTP/1.0 200 OK\r\nContent-Length: $(wc -c < $1)\r\n\r\n"; cat $1; } | nc -l $2
+done

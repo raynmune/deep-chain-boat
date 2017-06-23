@@ -1,0 +1,62 @@
+#!/bin/bash
+
+for i in "$@"
+do
+case $i in
+    -node-description-port=*)
+    NODE_DESCRIPTION_PORT="${i#*=}"
+    shift # past argument=value
+    ;;
+    -default-network-port=*)
+    DEFAULT_NETWORK_PORT="${i#*=}"
+    #shift # past argument=value
+    ;;
+    -default-rpc-port=*)
+    DEFAULT_RPC_PORT="${i#*=}"
+    #shift # past argument=value
+    ;;
+    -external-ip=*)
+    EXTERNAL_IP="${i#*=}"
+    shift # past argument=value
+    ;;
+    -hidden-service-dir=*)
+    HiDDEN_SERVICE_DIR="${i#*=}"
+    shift # past argument=value
+    ;;
+    -hidden-service-name=*)
+    HiDDEN_SERVICE_NAME="${i#*=}"
+    shift # past argument=value
+    ;;
+    -blockchain-name=*)
+    BLOCKCHAIN_NAME="${i#*=}"
+    shift # past argument=value
+    ;;
+	
+    *)
+    ;;
+esac
+done
+
+docker run --name onionboat-$BLOCKCHAIN_NAME -d -p 9001:9001 -v /var/run/docker.sock:/tmp/docker.sock:ro jheretic/onionboat
+docker network create -o "com.docker.network.bridge.enable_ip_masquerade=false" network-$BLOCKCHAIN_NAME
+docker network connect network-$BLOCKCHAIN_NAME onionboat-$BLOCKCHAIN_NAME
+
+docker run --rm --volume ~/.multichain:/multichain raynmune/multichain:1720-7c6d3b9 multichain-util create $BLOCKCHAIN_NAME -datadir=/multichain "$@"
+docker run -d --net network-$BLOCKCHAIN_NAME \
+	--volume ~/.multichain:/multichain \
+	--volume $HiDDEN_SERVICE_DIR:/var/lib/tor/hidden_services/$HiDDEN_SERVICE_NAME/ \
+	 -e HIDDENSERVICE_NAME=$HiDDEN_SERVICE_NAME \
+	--expose $NODE_DESCRIPTION_PORT --expose $DEFAULT_NETWORK_PORT --expose $DEFAULT_RPC_PORT --expose 9051 \
+	-p ${NODE_DESCRIPTION_PORT}:${NODE_DESCRIPTION_PORT} -p ${DEFAULT_NETWORK_PORT}:${DEFAULT_NETWORK_PORT} \
+	-p ${DEFAULT_RPC_PORT}:${DEFAULT_RPC_PORT} -p 9051:9051 \
+	--name $BLOCKCHAIN_NAME \
+	raynmune/multichain:1720-7c6d3b9 multichaind $BLOCKCHAIN_NAME \
+		-daemon
+		-externalip=${EXTERNAL_IP} -proxy=127.0.0.1:9051 \
+		-datadir=/multichain \
+		-listen \
+		&& node-description-listen /multichain/$BLOCKCHAIN_NAME/params.dat $NODE_DESCRIPTION_PORT
+
+
+
+
